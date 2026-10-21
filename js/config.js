@@ -4,7 +4,7 @@
 'use strict';
 
 const CONFIG = {
-  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
+  SUPABASE_URL: 'https://hhkebtqwbesjmsjmvldh.supabase.co',
   SUPABASE_ANON_KEY: 'YOUR-ANON-KEY',
   // Customers sign in with their phone number. Behind the scenes Supabase stores it as
   // p252XXXXXXXXX@<this domain>. Keep it unchanged once people have signed up.
