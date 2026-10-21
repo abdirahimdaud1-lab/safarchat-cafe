@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SafarChat Staff</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0C361F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SafarChat Staff">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="icon" href="assets/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@1,6..96,400&family=Jost:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/staff.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="seal" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#0C361F"/><image href="assets/camel.webp" x="6" y="6" width="88" height="88"/><circle cx="50" cy="50" r="45.5" fill="none" stroke="#F5F0E6" stroke-width="3"/></symbol>
+</defs></svg>
+
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 100 100"><use href="#seal"/></svg><div><b>SAFARCHAT</b><span>Staff screen</span></div></div>
+  <nav class="tabs" id="tabs" hidden></nav>
+  <div class="who" id="who"></div>
+</header>
+<main id="main"><div class="center"><div class="spinner"></div></div></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/core/helpers.js"></script>
+<script src="js/core/api.js"></script>
+<script src="js/core/time.js"></script>
+<script src="js/data/menu.js"></script>
+<script src="js/staff/staff.js"></script>
+</body>
+</html>

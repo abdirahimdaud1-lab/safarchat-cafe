@@ -72,7 +72,7 @@ function openProduct(pid, editIdx = null){
     <p class="pd-desc">${esc(p.desc)}</p>
     <div class="pd-meta"><span class="pill pill-grey">${SUBNAME[p.sub]}</span><span class="pill pill-grey">${p.kcal} kcal</span>${p.n?'<span class="pill pill-gold">NEW</span>':''}${p.sig?'<span class="pill pill-green">SIGNATURE</span>':''}<span class="pill pill-gold">Earn ${Math.floor(p.price*EARN_PER_USD)}★+</span></div>${opts}`;
   const foot = `<div class="pd-ft"><div class="stepper">${`<button data-act="pdStep" data-key="qty" data-d="-1" class="${PD.qty<=1?'dis':''}" aria-label="Fewer">${I.minus}</button><span class="v" data-num="qty">${PD.qty}</span><button data-act="pdStep" data-key="qty" data-d="1" aria-label="More">${I.plus}</button>`}</div>
-    <button class="btn btn-green" data-act="pdAdd" data-edit="${editIdx == null ? '' : editIdx}">${editIdx == null ? 'Add to Order' : 'Update'} · <span class="js-pd-price num">${money(unitPrice(p, PD) * PD.qty)}</span></button></div>`;
+    ${p.available === false ? '<button class="btn btn-green" disabled>Sold out today</button>' : `<button class="btn btn-green" data-act="pdAdd" data-edit="${editIdx == null ? '' : editIdx}">${editIdx == null ? 'Add to Order' : 'Update'} · <span class="js-pd-price num">${money(unitPrice(p, PD) * PD.qty)}</span></button>`}</div>`;
   const el = sheet('', body, foot, { noHead:true });
   el.querySelector('.sheet').insertAdjacentHTML('afterbegin', `<button class="x-btn" data-act="closeTop" aria-label="Close" style="position:absolute;top:14px;right:max(16px,env(safe-area-inset-right,0px));z-index:2">${I.x}</button>`);
   const sw = $('#sweet', el);

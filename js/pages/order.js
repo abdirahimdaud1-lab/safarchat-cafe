@@ -7,7 +7,7 @@ function R_order(){
   el.innerHTML = `<div class="shd gut">
     <div class="shd-row"><h1>Order</h1>${topBtns()}</div>
     <div style="margin-top:10px">${S.store
-      ? `<button class="store-sel" data-act="pickStore"><span class="sa" style="width:40px;height:40px">${seal()}</span><span class="sl"><b>${esc(STORE.name)}</b><span><span style="color:${open?'var(--ok)':'var(--bad)'};font-weight:600">${open?'Open Now':'Closed'}</span> · 6:30 AM – 11:30 PM</span></span><span class="chg">Change</span></button>`
+      ? `<button class="store-sel" data-act="pickStore"><span class="sa" style="width:40px;height:40px">${seal()}</span><span class="sl"><b>${esc(STORE.name)}</b><span><span style="color:${open?'var(--ok)':'var(--bad)'};font-weight:600">${open?'Open Now':'Closed'}</span> · ${storeHours()}</span></span><span class="chg">Change</span></button>`
       : `<button class="store-first" data-act="pickStore"><span class="sfi">${I.store}</span><span><b>Select a Store First</b><span>For item availability and pickup</span></span><span class="chev" style="width:20px;height:20px">${I.chevR}</span></button>`}</div>
     <label class="search">${I.search}<input id="q" type="text" enterkeyhint="search" placeholder="Search drinks, food…" value="${esc(ui.q)}" autocomplete="off" aria-label="Search menu"><button class="clear" data-act="clearQ" aria-label="Clear search" ${ui.q ? '' : 'hidden'}>${I.x}</button></label>
     <div class="otabs" role="tablist">${[['featured','Featured'],['drinks','Drinks'],['food','Food']].map(([k, l]) => `<button class="otab ${ui.otab===k && !ui.q?'on':''}" data-act="otab" data-k="${k}" role="tab">${l}</button>`).join('')}</div>
@@ -19,9 +19,9 @@ function R_order(){
 }
 function pcard(p){
   const tag = p.n ? '<span class="pill pill-gold tag">NEW</span>' : p.sig ? '<span class="pill pill-green tag">SIGNATURE</span>' : '';
-  return `<div class="pc"><button data-act="prod" data-id="${p.id}" style="text-align:left;display:flex;flex-direction:column;flex:1" aria-label="${esc(p.name)}">${tag}<div class="pa" style="width:100%">${art(p.art)}</div>
+  return `<div class="pc ${p.available === false ? 'soldout' : ''}"><button data-act="prod" data-id="${p.id}" style="text-align:left;display:flex;flex-direction:column;flex:1" aria-label="${esc(p.name)}">${tag}<div class="pa" style="width:100%">${art(p.art)}</div>
     <div class="pb" style="width:100%"><b>${esc(p.name)}</b><span class="kc">${p.kcal} kcal</span></div></button>
-    <div class="pr" style="padding:0 12px 12px"><span class="price num">${money(p.price)}</span><button class="add" data-act="quick" data-id="${p.id}" aria-label="Add ${esc(p.name)}">${I.plus}</button></div></div>`;
+    <div class="pr" style="padding:0 12px 12px"><span class="price num">${money(p.price)}</span>${p.available === false ? '<span class="pill pill-grey">Sold out</span>' : `<button class="add" data-act="quick" data-id="${p.id}" aria-label="Add ${esc(p.name)}">${I.plus}</button>`}</div></div>`;
 }
 function renderMenu(){
   const list = $('#menuList'), subs = $('#subs'); if (!list) return;
@@ -55,7 +55,7 @@ function openStorePicker(after){
   const el = sheet('Choose a Store', `
     <button class="store ${S.store==='dahab'?'on':''}" data-act="setStore"><span class="sa">${seal()}</span><span>
       <b>${esc(STORE.name)}</b><p>${esc(STORE.addr)}</p>
-      <span class="meta"><span class="pill ${open?'pill-ok':'pill-bad'}">${open?'● Open Now':'● Closed'}</span><span>${I.clock.replace('<svg','<svg width="14" height="14" style="vertical-align:-2px"')} 6:30 AM – 11:30 PM</span><span>${STORE.dist}</span></span>
+      <span class="meta"><span class="pill ${open?'pill-ok':'pill-bad'}">${open?'● Open Now':'● Closed'}</span><span>${I.clock.replace('<svg','<svg width="14" height="14" style="vertical-align:-2px"')} ${storeHours()}</span><span>${STORE.dist}</span></span>
       <span class="feats"><span class="pill pill-grey">Store Pickup</span><span class="pill pill-grey">Car Pickup</span><span class="pill pill-grey">Nearby Delivery</span></span>
     </span></button>
     <p class="foot-note">More SafarChat stores are coming soon.</p>`, '', { pre:'<div class="sp-small">For Item Availability</div>' });

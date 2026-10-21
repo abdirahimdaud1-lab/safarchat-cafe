@@ -34,10 +34,11 @@ function R_account(){
       <button class="mi" data-act="payMethods"><span class="mic">${I.wallet}</span><span class="t"><b>Payment methods</b><span>EVC Plus · eDahab · Premier Wallet</span></span>${I.chevR.replace('<svg','<svg class="ch"')}</button>
       <button class="mi" data-act="bell"><span class="mic">${I.bell}</span><span class="t"><b>Notifications</b><span>${S.notes.filter(n => !n.read).length} unread</span></span>${I.chevR.replace('<svg','<svg class="ch"')}</button>
       <button class="mi" data-act="help"><span class="mic">${I.help}</span><span class="t"><b>Help &amp; store info</b><span>Hours, contact, FAQs</span></span>${I.chevR.replace('<svg','<svg class="ch"')}</button>
-      <button class="mi" data-act="signOutAsk"><span class="mic">${I.back}</span><span class="t"><b>Sign out</b><span>Signed in as ${esc(fmtPhone(DB.accounts[ME].phone))}</span></span>${I.chevR.replace('<svg','<svg class="ch"')}</button>
+      ${S.role !== 'customer' ? `<a class="mi" href="staff.html"><span class="mic">${I.store}</span><span class="t"><b>Staff screen</b><span>${S.role === 'admin' ? 'Orders, payments, menu & people' : 'Orders & payment checks'}</span></span>${I.chevR.replace('<svg','<svg class="ch"')}</a>` : ''}
+      <button class="mi" data-act="signOutAsk"><span class="mic">${I.back}</span><span class="t"><b>Sign out</b><span>Signed in as ${esc(S.user.phone)}</span></span>${I.chevR.replace('<svg','<svg class="ch"')}</button>
       <button class="mi" data-act="deleteAsk"><span class="mic" style="color:var(--bad)">${I.trash}</span><span class="t"><b style="color:var(--bad)">Delete account</b><span>Remove your account and all its history</span></span>${I.chevR.replace('<svg','<svg class="ch"')}</button>
     </div></div>
-    <p class="foot-note">SafarChat Café · Mogadishu<br><span class="serif" style="font-size:15px">A Better Journey in Every Cup</span><br>Member since ${fmtDate(DB.accounts[ME].created)}<br>Test version 2.0 · payments are simulated</p>
+    <p class="foot-note">SafarChat Café · Mogadishu<br><span class="serif" style="font-size:15px">A Better Journey in Every Cup</span><br>Member since ${fmtDate(S.created)}<br>Version 3.0</p>
   </div>`;
 }
 function openProfile(focus){
@@ -55,14 +56,14 @@ function renderProfile(el){
     <div class="field"><span>Profile Picture</span><div class="photo-row"><span class="avatar">${u.photo ? `<img src="${u.photo}" alt="">` : esc(initials(u.name))}</span>
       <div style="display:grid;gap:8px"><label class="btn btn-line btn-sm">${I.camera.replace('<svg','<svg width="16" height="16"')} ${u.photo ? 'Change photo' : 'Upload photo'}<input type="file" id="pfPhoto" accept="image/*"></label>${u.photo ? '<button class="del" data-act="pfNoPhoto">Remove photo</button>' : ''}</div></div></div>
     <label class="field"><span>Name</span><input class="inp" id="pfName" value="${esc(u.name)}" autocomplete="name"></label>
-    <label class="field"><span>Contact Number</span><input class="inp" id="pfPhone" inputmode="tel" value="${esc(u.phone)}" autocomplete="tel"></label>
+    <div class="field"><span>Contact Number</span><input class="inp" id="pfPhone" value="${esc(u.phone)}" readonly aria-readonly="true" style="background:var(--milk);color:var(--muted)"><p style="font-size:12px;color:var(--muted);margin-top:6px">This is the number you sign in with. To change it, ask the café.</p></div>
     <label class="field"><span>Contact Email <em>(Optional)</em></span><input class="inp" id="pfEmail" type="email" placeholder="e.g. name@email.com" value="${esc(u.email)}" autocomplete="email"></label>
     <div class="field"><span>Gender</span><div class="genders"><button class="${u.gender==='Male'?'on':''}" data-act="pfGender" data-g="Male">Male</button><button class="${u.gender==='Female'?'on':''}" data-act="pfGender" data-g="Female">Female</button></div></div>
     <div class="field"><span>Date of birth</span><div class="dob"><span id="dobTxt">${u.dob ? new Date(u.dob + 'T00:00').toLocaleDateString(undefined, { day:'numeric', month:'long', year:'numeric' }) : '<span style="color:var(--muted);font-weight:400">Not set</span>'}</span>
       <label>${I.cal} Select Date<input type="date" id="pfDob" value="${esc(u.dob)}" max="${new Date().toISOString().slice(0,10)}" aria-label="Select date of birth"></label></div>
       <p style="font-size:12px;color:var(--muted);margin-top:6px">Get 50 bonus Stars on your birthday.</p></div>
     <div class="form-sec" id="addrSec">Address</div>
-    <label class="field"><span>Building</span><select class="inp" id="pfBuilding"><option value="" ${u.address.building?'':'selected'}>Select a building</option><option ${u.address.building==='Dahab Tower'?'selected':''}>Dahab Tower</option><option disabled>More buildings coming soon</option></select></label>
+    <label class="field"><span>Building</span><select class="inp" id="pfBuilding"><option value="" ${u.address.building?'':'selected'}>Select a building</option>${SETTINGS.buildings.map(b => `<option ${u.address.building===b?'selected':''}>${esc(b)}</option>`).join('')}<option disabled>More buildings coming soon</option></select></label>
     <div class="two"><label class="field"><span>Floor Number</span><input class="inp" id="pfFloor" placeholder="e.g. 2 or 2A" value="${esc(u.address.floor)}" maxlength="6"></label>
     <label class="field"><span>Door Number</span><input class="inp" id="pfDoor" placeholder="e.g. A1" value="${esc(u.address.door)}" maxlength="8"></label></div>
     <label class="field"><span>Country</span><select class="inp" id="pfCountry"><option selected>Somalia</option></select></label>
@@ -71,7 +72,6 @@ function renderProfile(el){
     <p class="err-msg" id="pfErr" hidden></p>`;
   const on = (id, f, ev = 'input') => { const i = $('#' + id, el); if (i) i.addEventListener(ev, f); };
   on('pfName', e => u.name = e.target.value);
-  on('pfPhone', e => u.phone = e.target.value);
   on('pfEmail', e => u.email = e.target.value.trim());
   on('pfFloor', e => u.address.floor = e.target.value);
   on('pfDoor', e => u.address.door = e.target.value);
@@ -82,16 +82,22 @@ function renderProfile(el){
   on('pfPhoto', e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); const s = 240; c.width = c.height = s; const x = c.getContext('2d'); const m = Math.min(img.width, img.height); x.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, s, s); u.photo = c.toDataURL('image/jpeg', .82); renderProfile(el); }; img.src = r.result; };
+    r.onload = () => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); const s = 200; c.width = c.height = s; const x = c.getContext('2d'); const m = Math.min(img.width, img.height); x.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, s, s); u.photo = c.toDataURL('image/jpeg', .82); renderProfile(el); }; img.src = r.result; };
     r.readAsDataURL(f);
   }, 'change');
 }
 function openMyOrders(){
-  page('My Orders', S.orders.length ? S.orders.map(o => `<div class="oc"><div class="oh"><b class="num">${o.id}</b><span class="pill ${o.status==='Preparing'?'pill-gold':'pill-ok'}">${o.status}</span></div>
-    <div class="om">${fmtDT(o.t)} · ${o.mode} · ${o.method}</div>
+  const el = page('My Orders', '');
+  el._orders = true;
+  renderMyOrders(el);
+}
+function renderMyOrders(el){
+  $('.page-bd', el).innerHTML = S.orders.length ? S.orders.map(o => { const st = ORDER_STATUS[o.statusKey] || [o.status, 'pill-grey']; return `<div class="oc"><div class="oh"><b class="num">${o.id}</b><span class="pill ${st[1]}">${st[0]}</span></div>
+    <div class="om">${fmtDT(o.t)} · ${o.mode} · ${o.method}${o.payRef ? ' · ' + esc(o.payRef) : ''}</div>
     <div class="oi">${o.items.map(i => `${i.qty}× ${esc(i.name)} <span style="color:var(--muted)">(${esc(i.opts)})</span>`).join('<br>')}</div>
-    <div class="of"><span><b class="num">${money(o.total)}</b>${o.starsUsed ? ` <span style="font-size:12px;color:var(--gold)">· ${o.starsUsed}★ used</span>` : ''}</span><button class="btn btn-line btn-sm" data-act="reorder" data-id="${o.id}">Reorder</button></div></div>`).join('')
-    : `<div class="empty">No orders yet. Your first one is a tap away.</div>`);
+    ${o.note && (o.statusKey === 'rejected' || o.statusKey === 'cancelled') ? `<div class="banner" style="margin-top:10px">${I.info}<span>${esc(o.note)}</span></div>` : ''}
+    <div class="of"><span><b class="num">${money(o.total)}</b>${o.starsUsed ? ` <span style="font-size:12px;color:var(--gold)">· ${o.starsUsed}★ used</span>` : ''}${o.starsEarned ? ` <span style="font-size:12px;color:var(--ok)">· +${o.starsEarned}★</span>` : ''}</span><button class="btn btn-line btn-sm" data-act="reorder" data-id="${o.id}">Reorder</button></div></div>`; }).join('')
+    : `<div class="empty">No orders yet. Your first one is a tap away.</div>`;
 }
 function openQRFull(){
   const el = document.createElement('div');
@@ -104,19 +110,24 @@ function openQRFull(){
 function openNotes(){
   const el = sheet('Notifications', S.notes.length ? S.notes.map(n => `<div class="nt ${n.read?'':'unread'}"><span class="ni">${I[n.icon] || I.bell}</span><div><b>${esc(n.title)}</b><p>${esc(n.body)}</p><time>${ago(n.t)}</time></div></div>`).join('') : '<div class="empty">No messages yet.</div>',
     S.notes.some(n => !n.read) ? '<button class="btn btn-line btn-block" data-act="readAll">Mark all as read</button>' : '', { pre:'<div class="eyebrow">Messages from SafarChat</div>' });
-  el._onClose = () => { S.notes.forEach(n => n.read = true); save(); refreshBadges(); if (ui.tab === 'account') R_account(); };
+  el._onClose = () => {
+    if (!S || !S.notes.some(n => !n.read)) return;
+    S.notes.forEach(n => n.read = true); refreshBadges(); if (ui.tab === 'account') R_account();
+    API.call('mark_notes_read').catch(() => {});
+  };
 }
 function openHelp(){
   const open = storeOpen();
   page('Help & store info', `<div class="store" style="pointer-events:none"><span class="sa">${seal()}</span><span><b>${esc(STORE.name)}</b><p>${esc(STORE.addr)}</p>
-    <span class="meta"><span class="pill ${open?'pill-ok':'pill-bad'}">${open?'● Open Now':'● Closed'}</span><span>6:30 AM – 11:30 PM daily</span></span></span></div>
+    <span class="meta"><span class="pill ${open?'pill-ok':'pill-bad'}">${open?'● Open Now':'● Closed'}</span><span>${storeHours()} daily</span></span></span></div>
     <div class="menu" style="margin-top:14px"><div class="mi"><span class="mic">${I.phone}</span><span class="t"><b style="user-select:all">${STORE.phone}</b><span>Call or WhatsApp the store</span></span></div>
     <div class="mi"><span class="mic">${I.receipt}</span><span class="t"><b style="user-select:all">hello@safarchatcafe.com</b><span>Email us</span></span></div></div>
     <div class="sec"><div class="sec-hd"><h2>FAQs</h2></div><div class="faq">
       <details><summary>How do Stars work?</summary><p>You earn 2 Stars for every $1 you pay. Every 100 Stars is worth $8.00 off. Use them in the cart, pay a whole order with Stars, or share them with friends.</p></details>
-      <details><summary>Which payments do you accept?</summary><p>EVC Plus, eDahab and Premier Wallet, plus your Star balance. You approve each payment on your phone.</p></details>
+      <details><summary>How do I pay?</summary><p>At checkout choose EVC Plus, eDahab or Premier Wallet. The app shows the exact code to dial with your total. Approve with your PIN, then type the transaction ID from your SMS. The café checks it and confirms your order, usually within a few minutes. You can also pay with Stars.</p></details>
+      <details><summary>I forgot my password</summary><p>Visit the café or call ${esc(STORE.phone)}. Staff check the number is yours and set a new password.</p></details>
       <details><summary>How does Car Pickup work?</summary><p>Add your Taargo (plate number). When your order is ready a barista brings it out to your car in front of Dahab Tower.</p></details>
-      <details><summary>Where do you deliver?</summary><p>Nearby Delivery currently covers Dahab Tower. More buildings are being added soon. Delivery is ${money(DELIVERY_FEE)}.</p></details>
-      <details><summary>Is this the real app?</summary><p>This is a test version for review. Payments are simulated. Accounts, orders and history are saved on this phone, so share Stars and gifts work between accounts created on the same phone until the app is connected to a server.</p></details>
+      <details><summary>Where do you deliver?</summary><p>Nearby Delivery currently covers Dahab Tower. More buildings are being added soon. Delivery is ${money(SETTINGS.delivery_fee)}.</p></details>
+      <details><summary>Is my account safe?</summary><p>Your account is protected by your password and stored securely on our server. Only you can see your orders and Stars, and staff only see what they need to make your order.</p></details>
     </div></div>`);
 }

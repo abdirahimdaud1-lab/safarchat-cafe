@@ -1,31 +1,58 @@
-/* Checkout: Store Pickup / Car Pickup / Nearby Delivery, pickup time, payment (EVC Plus, eDahab, Premier Wallet, Stars) and order confirmation. */
+/* Checkout: Store Pickup / Car Pickup / Nearby Delivery, pickup time, and payment.
+   Totals always come from the server (quote_order). Mobile-money payments are sent by the customer
+   to the café's number and confirmed by staff using the transaction ID ("payment check"). */
 'use strict';
 
 const PMS = {
-  evc:{ name:'EVC Plus', cls:'pm-evc', short:'EVC+', sub:'Hormuud mobile money', ussd:'*712#' },
-  edahab:{ name:'eDahab', cls:'pm-edahab', short:'eDahab', sub:'Dahabshiil mobile wallet', ussd:'*110#' },
-  premier:{ name:'Premier Wallet', cls:'pm-premier', short:'PREMIER', sub:'Premier Bank wallet', ussd:'the Premier Wallet app' },
+  evc:{ name:'EVC Plus', cls:'pm-evc', short:'EVC+', sub:'Hormuud mobile money' },
+  edahab:{ name:'eDahab', cls:'pm-edahab', short:'eDahab', sub:'Dahabshiil mobile wallet' },
+  premier:{ name:'Premier Wallet', cls:'pm-premier', short:'PREMIER', sub:'Premier Bank wallet' },
   stars:{ name:'Stars', cls:'pm-stars', short:'', sub:'Pay with your Star balance' }
 };
 const pmLogo = k => `<span class="pm-logo ${PMS[k].cls}">${k === 'stars' ? I.star : PMS[k].short}</span>`;
+const amtStr = n => String(Number((+n).toFixed(2)));
+/* How to send money to the café for each wallet. */
+function payGuide(k, total){
+  if (k === 'evc') return { code:`*712*${SETTINGS.evc_number}*${amtStr(total)}#`, how:'Dial this on the phone with your EVC Plus account, then enter your PIN to approve.' };
+  if (k === 'edahab') return { code:`*110*${SETTINGS.edahab_number}*${amtStr(total)}#`, how:'Dial this on the phone with your eDahab account, then enter your PIN to approve.' };
+  return { code:SETTINGS.premier_number, how:`Open the Premier Wallet app → Send money → enter this number and ${money(total)}, then approve.` };
+}
+const payGuideHTML = (k, total) => { const g = payGuide(k, total); return `<p class="pg-how">${g.how}</p>
+  <div class="dial"><code class="num" id="dialCode">${esc(g.code)}</code><button class="btn btn-sm btn-green" data-act="copyCode" data-code="${esc(g.code)}">Copy</button></div>`; };
+
 let CO = null;
+function orderPayload(){
+  return {
+    store_id:STORE.id, items:S.cart.map(c => ({ product_id:c.pid, qty:c.qty, sel:c.sel })),
+    mode:CO.mode, pickup_time:CO.time, note:CO.note, plate:CO.plate, car:CO.car,
+    building:CO.building, floor:CO.floor, door:CO.door, stars_used:totals().used,
+    pay_method:CO.method, pay_phone:CO.phone, pay_ref:CO.ref
+  };
+}
 function openCheckout(){
   if (!S.cart.length) return;
   if (!S.store) return needStore(openCheckout);
   const ad = S.user.address || {};
-  CO = { mode:'store', time:'Now', note:'', plate:'', car:'', building:'Dahab Tower', floor:ad.floor || '', door:ad.door || '', method:null, revealed:false, phone:S.user.phone, err:{} };
+  CO = { mode:'store', time:'Now', note:'', plate:'', car:'', building:SETTINGS.buildings[0] || 'Dahab Tower', floor:ad.floor || '', door:ad.door || '',
+         method:null, revealed:false, phone:S.user.phone, ref:'', err:{}, quote:null, qerr:null, busy:false };
   const el = page('Checkout', '', '<div id="coFoot"></div>');
   el._co = true;
   renderCheckout(el);
+  requote();
 }
-function coTotals(){ return totals(CO.mode === 'delivery' ? DELIVERY_FEE : 0); }
+async function requote(){
+  CO.quote = null; CO.qerr = null; renderCheckout();
+  try { CO.quote = await API.call('quote_order', { p:orderPayload() }); }
+  catch (e) { CO.qerr = errText(e); }
+  renderCheckout();
+}
 function renderCheckout(el){
-  el = el || stack.find(e => e._co); if (!el) return;
-  const T = coTotals(), open = storeOpen();
-  const starsNeed = Math.ceil(T.total / STAR_USD);
-  const spare = S.stars - T.used;
+  el = el || stack.find(e => e._co); if (!el || !CO) return;
+  const Q = CO.quote, open = storeOpen();
   const timeLbl = CO.mode === 'delivery' ? 'Delivery time' : 'Pick up time';
+  const spare = Q ? S.stars - Q.stars_used : 0;
   const bd = $('.page-bd', el);
+  const keep = bd.scrollTop;
   bd.innerHTML = `
     <h1 class="co-title">How Would You Like Your Order</h1>
     <p class="co-sub">Choose your preferred way to receive</p>
@@ -34,9 +61,9 @@ function renderCheckout(el){
       <button class="mode ${CO.mode==='car'?'on':''}" data-act="coMode" data-m="car">${I.car}Car Pickup</button>
       <button class="mode ${CO.mode==='delivery'?'on':''}" data-act="coMode" data-m="delivery">${I.bike}Nearby Delivery</button>
     </div>
-    ${open ? '' : `<div class="banner">${I.info}<span>Dahab Tower is closed right now (open 6:30 AM – 11:30 PM). You can still place this test order.</span></div>`}
-    ${CO.mode === 'delivery' ? `<div class="blk"><h3>Delivery</h3><p class="hint">We deliver to buildings near Dahab Tower · ${money(DELIVERY_FEE)} fee</p>
-      <label class="field"><span>Building Name</span><select class="inp" id="coBuilding"><option ${CO.building==='Dahab Tower'?'selected':''}>Dahab Tower</option></select></label>
+    ${open ? '' : `<div class="banner">${I.info}<span>${esc(STORE.name.split('· ')[1] || STORE.name)} is closed right now (open ${storeHours()}). Your order will be made when we open.</span></div>`}
+    ${CO.mode === 'delivery' ? `<div class="blk"><h3>Delivery</h3><p class="hint">We deliver to buildings near Dahab Tower · ${money(SETTINGS.delivery_fee)} fee</p>
+      <label class="field"><span>Building Name</span><select class="inp" id="coBuilding">${SETTINGS.buildings.map(b => `<option ${CO.building===b?'selected':''}>${esc(b)}</option>`).join('')}</select></label>
       <div class="two"><label class="field"><span>Floor Number <em>(Optional)</em></span><input class="inp" id="coFloor" placeholder="e.g. 2 or 2A" value="${esc(CO.floor)}" maxlength="6"></label>
       <label class="field"><span>Door Number <em>(Optional)</em></span><input class="inp" id="coDoor" placeholder="e.g. A1" value="${esc(CO.door)}" maxlength="8"></label></div></div>` : ''}
     <div class="blk"><h3>${timeLbl}</h3>
@@ -44,95 +71,91 @@ function renderCheckout(el){
     ${CO.mode === 'car' ? `<div class="blk"><h3>Car Details</h3><p class="hint">We'll bring your order to your car outside Dahab Tower</p>
       <label class="field"><span style="font-size:12px;color:var(--muted)">Taargo / Plate no.</span><input class="inp ${CO.err.plate?'err':''}" id="coPlate" placeholder="e.g. BN 4521" value="${esc(CO.plate)}" maxlength="12"></label>
       ${CO.err.plate ? '<p class="err-msg">Enter your plate number so the barista can find your car.</p>' : ''}
-      <label class="field"><span>Car colour &amp; model <em>(Optional)</em></span><input class="inp" id="coCar" placeholder="e.g. White Toyota Noah" value="${esc(CO.car)}"></label></div>` : ''}
+      <label class="field"><span>Car colour &amp; model <em>(Optional)</em></span><input class="inp" id="coCar" placeholder="e.g. White Toyota Noah" value="${esc(CO.car)}" maxlength="40"></label></div>` : ''}
     <div class="blk"><h3>Note <span style="font-weight:400;color:var(--muted);font-size:14px">(Optional)</span></h3>
-      <textarea class="ta" id="coNote" placeholder="e.g. Please call when it's ready" style="margin-top:10px">${esc(CO.note)}</textarea></div>
+      <textarea class="ta" id="coNote" placeholder="e.g. Please call when it's ready" style="margin-top:10px" maxlength="200">${esc(CO.note)}</textarea></div>
     <div class="blk"><h3>Payment</h3><p class="hint">Choose your payment method</p>
-      <button class="paysel" data-act="coPick">${CO.method ? pmLogo(CO.method) : `<span class="pm-logo" style="background:var(--milk);color:var(--green)">${I.wallet.replace('<svg','<svg width="18" height="18"')}</span>`}<span class="pl ${CO.method?'':'ph'}">${CO.method ? PMS[CO.method].name : 'Select payment method'}</span><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button>
-      ${CO.method ? `<button class="total-btn" data-act="coReveal"><span style="color:inherit;font-size:17px;font-weight:700">Total ${money(T.total)}</span><span>${CO.revealed ? 'Confirmed' : 'Tap to confirm'} ›</span></button>` : ''}
-      ${CO.method && CO.revealed ? (CO.method === 'stars'
-        ? `<div class="payphone"><div class="row">${pmLogo('stars')}<div><b class="num">${starsNeed}★</b><div style="font-size:12px;color:var(--muted)">will be taken from your ${spare}★</div></div></div><p>Stars left after paying: <b class="num">${spare - starsNeed}★</b></p></div>`
-        : `<div class="payphone"><div class="row">${pmLogo(CO.method)}<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--muted)">Paying from your ${PMS[CO.method].name} number</div><input class="inp ${CO.err.phone?'err':''}" id="coPhone" inputmode="tel" value="${esc(CO.phone)}" style="margin-top:6px;font-weight:600;font-size:17px" aria-label="Payment phone number"></div></div>
-          ${CO.err.phone ? '<p class="err-msg">Enter a valid Somali mobile number, e.g. +252 61 234 5678.</p>' : ''}
-          <p>Filled in from your profile. You'll get a request on this number to approve ${money(T.total)}.</p></div>`) : ''}
+      <button class="paysel" data-act="coPick" ${Q ? '' : 'disabled'}>${CO.method ? pmLogo(CO.method) : `<span class="pm-logo" style="background:var(--milk);color:var(--green)">${I.wallet.replace('<svg','<svg width="18" height="18"')}</span>`}<span class="pl ${CO.method?'':'ph'}">${CO.method ? PMS[CO.method].name : 'Select payment method'}</span><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      ${CO.method && Q ? `<button class="total-btn" data-act="coReveal"><span style="color:inherit;font-size:17px;font-weight:700">Total ${money(Q.total)}</span><span>${CO.revealed ? 'Confirmed' : 'Tap to confirm'} ›</span></button>` : ''}
+      ${CO.method && Q && CO.revealed ? (CO.method === 'stars'
+        ? `<div class="payphone"><div class="row">${pmLogo('stars')}<div><b class="num">${Q.stars_needed}★</b><div style="font-size:12px;color:var(--muted)">will be taken from your ${spare}★</div></div></div><p>Stars left after paying: <b class="num">${spare - Q.stars_needed}★</b></p></div>`
+        : `<div class="payguide">
+            <div class="pg-step"><span class="n">1</span><div class="pg-b"><b>Send ${money(Q.total)} to SafarChat Café</b>${payGuideHTML(CO.method, Q.total)}</div></div>
+            <div class="pg-step"><span class="n">2</span><div class="pg-b"><b>Number you paid from</b>
+              <input class="inp ${CO.err.phone?'err':''}" id="coPhone" inputmode="tel" value="${esc(CO.phone)}" aria-label="Number you paid from">
+              ${CO.err.phone ? '<p class="err-msg">Enter a valid Somali mobile number, e.g. 61 234 5678.</p>' : '<p class="pg-how">Filled in from your profile. Change it if you paid from another number.</p>'}</div></div>
+            <div class="pg-step"><span class="n">3</span><div class="pg-b"><b>Transaction ID</b>
+              <input class="inp ${CO.err.ref?'err':''}" id="coRef" value="${esc(CO.ref)}" placeholder="From your confirmation SMS" autocomplete="off" autocapitalize="characters" maxlength="40" aria-label="Transaction ID">
+              ${CO.err.ref ? '<p class="err-msg">Enter the transaction ID from your payment SMS (letters and numbers).</p>' : '<p class="pg-how">The café checks this against the payment before making your order.</p>'}</div></div>
+          </div>`) : ''}
     </div>
     <div class="co-sum num">
-      ${S.cart.map(c => `<div class="it"><span>${c.qty}× ${esc(c.name)}</span><span>${money(c.unit*c.qty)}</span></div>`).join('')}
+      ${CO.qerr ? `<div class="banner" style="margin:0">${I.info}<span>${esc(CO.qerr)} <button class="link" data-act="coRequote">Try again</button></span></div>`
+      : !Q ? `<div style="display:flex;gap:10px;align-items:center;color:var(--muted)"><span class="spinner" style="width:20px;height:20px;border-width:3px;margin:0"></span>Getting your total…</div>`
+      : `${Q.items.map(c => `<div class="it"><span>${c.qty}× ${esc(c.name)}</span><span>${money(c.unit*c.qty)}</span></div>`).join('')}
       <div style="border-top:1px dashed var(--line);margin:8px 0"></div>
-      <div class="it"><span>Subtotal</span><span>${money(T.sub)}</span></div>
-      ${T.disc ? `<div class="it" style="color:var(--gold)"><span>Stars (${T.used}★)</span><span>−${money(T.disc)}</span></div>` : ''}
-      <div class="it"><span>Tax (5%)</span><span>${money(T.tax)}</span></div>
-      ${T.fee ? `<div class="it"><span>Delivery</span><span>${money(T.fee)}</span></div>` : ''}
-      <div class="it" style="font-weight:700;font-size:16px;color:var(--green);margin-top:4px"><span>Total + Tax</span><span>${money(T.total)}</span></div>
-      <div class="it" style="color:var(--gold);font-size:12px"><span>Stars you'll earn</span><span>+${CO.method === 'stars' ? 0 : Math.floor(T.total * EARN_PER_USD)}★</span></div>
+      <div class="it"><span>Subtotal</span><span>${money(Q.subtotal)}</span></div>
+      ${+Q.discount ? `<div class="it" style="color:var(--gold)"><span>Stars (${Q.stars_used}★)</span><span>−${money(Q.discount)}</span></div>` : ''}
+      <div class="it"><span>Tax (5%)</span><span>${money(Q.tax)}</span></div>
+      ${+Q.delivery_fee ? `<div class="it"><span>Delivery</span><span>${money(Q.delivery_fee)}</span></div>` : ''}
+      <div class="it" style="font-weight:700;font-size:16px;color:var(--green);margin-top:4px"><span>Total + Tax</span><span>${money(Q.total)}</span></div>
+      <div class="it" style="color:var(--gold);font-size:12px"><span>Stars you'll earn</span><span>+${CO.method === 'stars' ? 0 : Q.stars_to_earn}★</span></div>`}
     </div>`;
-  const ready = CO.method && CO.revealed;
-  $('#coFoot', el).innerHTML = `<button class="btn btn-gold btn-block" data-act="coPay" ${ready ? '' : 'disabled'}>Pay ${money(T.total)}</button>${ready ? '' : '<p style="text-align:center;font-size:12px;color:var(--muted);margin-top:8px">Choose a payment method and confirm the total to pay</p>'}`;
-  const bind = (id, k, f = v => v) => { const i = $('#' + id, el); if (i) i.addEventListener('input', e => { CO[k] = f(e.target.value); }); };
-  bind('coFloor','floor'); bind('coDoor','door'); const pl = $('#coPlate', el); if (pl) pl.addEventListener('input', e => { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase(); e.target.setSelectionRange(p, p); CO.plate = e.target.value; }); bind('coCar','car'); bind('coNote','note'); bind('coPhone','phone');
+  bd.scrollTop = keep;
+  const ready = Q && CO.method && CO.revealed && !CO.busy;
+  const label = !Q ? 'Pay' : CO.method === 'stars' ? `Pay with ${Q.stars_needed}★` : `I've paid ${money(Q.total)} · Send order`;
+  $('#coFoot', el).innerHTML = `<button class="btn btn-gold btn-block" data-act="coPay" ${ready ? '' : 'disabled'}>${CO.busy ? 'Sending…' : label}</button>${ready || CO.busy ? '' : '<p style="text-align:center;font-size:12px;color:var(--muted);margin-top:8px">Choose a payment method and confirm the total</p>'}`;
+  const bind = (id, k) => { const i = $('#' + id, el); if (i) i.addEventListener('input', e => { CO[k] = e.target.value; }); };
+  bind('coFloor','floor'); bind('coDoor','door'); bind('coCar','car'); bind('coNote','note'); bind('coPhone','phone');
+  const up = (id, k) => { const i = $('#' + id, el); if (i) i.addEventListener('input', e => { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase(); try { e.target.setSelectionRange(p, p); } catch (x) {} CO[k] = e.target.value; }); };
+  up('coPlate', 'plate'); up('coRef', 'ref');
   const b = $('#coBuilding', el); if (b) b.addEventListener('change', e => CO.building = e.target.value);
 }
 function openPayPicker(){
-  const T = coTotals(), need = Math.ceil(T.total / STAR_USD), spare = S.stars - T.used;
-  const okStars = spare >= need;
+  const Q = CO.quote; if (!Q) return;
+  const need = Q.stars_needed, spare = S.stars - Q.stars_used, okStars = spare >= need;
   sheet('Payment method', `<div class="pms">
     ${['evc','edahab','premier','stars'].map(k => { const dis = k === 'stars' && !okStars; return `<button class="pm ${CO.method===k?'on':''} ${dis?'dis':''}" data-act="coSetPm" data-k="${k}">${pmLogo(k)}<span class="pt"><b>${PMS[k].name}</b><span>${k === 'stars' ? (okStars ? `Uses ${need}★ of your ${spare}★` : `Needs ${need}★ · you have ${spare}★`) : PMS[k].sub}</span></span><span class="radio"></span></button>`; }).join('')}</div>`);
 }
-/* validPhone lives in core/helpers.js */
-function doPay(){
+async function doPay(){
   CO.err = {};
-  if (CO.mode === 'car' && !CO.plate.trim()) CO.err.plate = 1;
-  if (CO.method !== 'stars' && !validPhone(CO.phone || '')) CO.err.phone = 1;
-  if (CO.err.plate || CO.err.phone){ renderCheckout(); toast('Check the highlighted fields'); return; }
-  const T = coTotals();
-  const pm = PMS[CO.method];
-  const proc = sheet('', `<div class="proc"><div class="spinner"></div><h3>${CO.method === 'stars' ? 'Redeeming your Stars…' : 'Waiting for approval…'}</h3>
-    <p>${CO.method === 'stars' ? 'Hold on while we apply your Stars.' : `We sent a ${money(T.total)} payment request to <b class="num">${esc(CO.phone)}</b>.<br>Approve it on your phone to finish.`}</p>
-    ${CO.method !== 'stars' ? `<div class="ussd">${pm.name} · ${CO.method === 'premier' ? 'Open the Premier Wallet app' : 'Dial ' + pm.ussd}</div>` : ''}
-    <p style="font-size:12px;margin-top:14px">Test mode: no real money is moved.</p></div>`, '', { noHead:true });
-  proc.querySelector('.ov-bg').removeAttribute('data-act');
-  setTimeout(() => finishOrder(T, proc), 2300);
-}
-function finishOrder(T, proc){
-  const id = 'SC-' + (4200 + Math.floor(Math.random() * 5700));
-  const starsPaid = CO.method === 'stars' ? Math.ceil(T.total / STAR_USD) : 0;
-  const earned = CO.method === 'stars' ? 0 : Math.floor(T.total * EARN_PER_USD);
-  const modeName = { store:'Store Pickup', car:'Car Pickup', delivery:'Nearby Delivery' }[CO.mode];
-  const where = CO.mode === 'car' ? `Car ${CO.plate}${CO.car ? ' · ' + CO.car : ''}` : CO.mode === 'delivery' ? `${CO.building}${CO.floor ? ', Floor ' + CO.floor : ''}${CO.door ? ', Door ' + CO.door : ''}` : 'Dahab Tower counter';
-  const order = { id, t:Date.now(), items:S.cart.map(c => ({ name:c.name, qty:c.qty, opts:c.opts, price:c.unit })), lines:S.cart.map(c => [c.pid, c.qty]), mode:modeName, where, time:CO.time, method:PMS[CO.method].name, total:T.total, starsUsed:T.used + starsPaid, status:'Preparing', note:CO.note };
-  const now = Date.now();
-  if (T.used) S.ledger.unshift({ id:uid(), t:now, kind:'redeem', title:'Redeemed Stars', detail:`${T.used}★ applied · ${money(T.disc)} off order ${id}`, stars:-T.used });
-  if (starsPaid) S.ledger.unshift({ id:uid(), t:now, kind:'pay', title:'Paid with Stars', detail:`Order ${id} · ${money(T.total)}`, stars:-starsPaid });
-  if (earned) S.ledger.unshift({ id:uid(), t:now + 1, kind:'earn', title:'Order at Dahab Tower', detail:order.items.map(i => i.name + (i.qty > 1 ? ' ×' + i.qty : '')).join(', ') + ' · ' + money(T.total), stars:earned, usd:T.total });
-  S.stars = S.stars - T.used - starsPaid + earned;
-  S.orders.unshift(order);
-  notify(ME, 'receipt', `Order ${id} received`, `${modeName} · ${CO.time}. Paid ${money(T.total)} with ${PMS[CO.method].name}.${earned ? ` You earned ${earned} Stars.` : ''}`);
-  S.cart = []; S.useStars = 0;
-  save();
-  closeAll();
-  setTimeout(() => {
-    page('Order placed', `<div class="success"><div class="check">${I.check}</div><h2>Thank you, ${esc(S.user.name.split(' ')[0])}!</h2><p class="serif">A Better Journey in Every Cup</p>
-      ${earned ? `<div class="earned">${I.star} You earned ${earned} Stars</div>` : ''}
-      <div class="receipt num">
-        <div class="rr"><span>Order</span><b>${id}</b></div>
-        <div class="rr"><span>How</span><span>${modeName}</span></div>
-        <div class="rr"><span>Where</span><span style="text-align:right">${esc(where)}</span></div>
-        <div class="rr"><span>${CO.mode==='delivery'?'Delivery':'Pick up'} time</span><span>${CO.time}</span></div>
-        <div class="rr"><span>Paid with</span><span>${PMS[CO.method].name}${CO.method !== 'stars' ? ' · ' + esc(CO.phone) : ''}</span></div>
-        <div style="border-top:1px dashed var(--line);margin:8px 0"></div>
-        ${order.items.map(i => `<div class="rr"><span>${i.qty}× ${esc(i.name)}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}
-        <div class="rr" style="font-weight:700;color:var(--green);font-size:16px"><span style="color:inherit">Total paid</span><span>${money(T.total)}</span></div>
-      </div></div>`,
-      `<div class="two"><button class="btn btn-line" data-act="goHome">Back to Home</button><button class="btn btn-green" data-act="myOrdersFromDone">My Orders</button></div>`);
+  if (CO.mode === 'car' && !/^[A-Z0-9][A-Z0-9 -]{1,11}$/.test(CO.plate.trim())) CO.err.plate = 1;
+  if (CO.method !== 'stars'){
+    if (!validPhone(CO.phone || '')) CO.err.phone = 1;
+    if (!/^[A-Za-z0-9-]{4,40}$/.test((CO.ref || '').trim())) CO.err.ref = 1;
+  }
+  if (Object.keys(CO.err).length){ renderCheckout(); toast('Check the highlighted fields'); return; }
+  CO.busy = true; renderCheckout();
+  const p = Object.assign(orderPayload(), { expected_total:CO.quote.total, plate:CO.plate.trim(), pay_ref:(CO.ref || '').trim() });
+  try {
+    const o = await API.call('place_order', { p });
+    S.cart = []; S.useStars = 0; save();
+    await refreshState().catch(() => {});
+    closeAll();
+    setTimeout(() => showOrderPlaced(mapOrder(o)), 340);
     refreshAll();
-  }, 340);
-  const owner = ME, delivery = CO.mode === 'delivery';
-  setTimeout(() => {
-    const d = DB.data[owner]; if (!d) return;
-    const o = d.orders.find(x => x.id === id); if (!o) return;
-    o.status = delivery ? 'On the way' : 'Ready';
-    notify(owner, 'cup', delivery ? `Order ${id} is on the way` : `Order ${id} is ready`, delivery ? 'Your rider is on the way to you.' : 'Your order is waiting for you. Enjoy it with pleasure!');
-    save();
-    if (ME === owner){ refreshBadges(); toast(delivery ? `Order ${id} is on the way` : `Order ${id} is ready`); }
-  }, 45000);
+  } catch (e) {
+    CO.busy = false;
+    if (/price_changed|too_many_stars|not_enough_stars/.test(e.message)){ toast(errText(e)); requote(); return; }
+    renderCheckout(); toast(errText(e));
+  }
+}
+function showOrderPlaced(o){
+  const checking = o.statusKey === 'payment_review';
+  const where = o.modeKey === 'car' ? `Car ${o.plate}${o.car ? ' · ' + o.car : ''}` : o.modeKey === 'delivery' ? `${o.building}${o.floor ? ', Floor ' + o.floor : ''}${o.door ? ', Door ' + o.door : ''}` : 'Dahab Tower counter';
+  page('Order placed', `<div class="success"><div class="check">${I.check}</div><h2>Thank you, ${esc(S.user.name.split(' ')[0])}!</h2><p class="serif">A Better Journey in Every Cup</p>
+    ${checking ? `<div class="earned" style="background:#F6EBD3">${I.clock} Checking your payment</div>
+      <p style="color:var(--muted);margin-top:12px;line-height:1.5">The café is matching your transaction ID with the payment. You'll get a message as soon as it's confirmed, and then you'll earn your Stars.</p>`
+      : `<div class="earned">${I.check} Paid with ${o.starsUsed}★ · we're preparing it</div>`}
+    <div class="receipt num">
+      <div class="rr"><span>Order</span><b>${o.id}</b></div>
+      <div class="rr"><span>How</span><span>${o.mode}</span></div>
+      <div class="rr"><span>Where</span><span style="text-align:right">${esc(where)}</span></div>
+      <div class="rr"><span>${o.modeKey==='delivery'?'Delivery':'Pick up'} time</span><span>${o.time}</span></div>
+      <div class="rr"><span>Payment</span><span>${o.method}${o.payRef ? ' · ' + esc(o.payRef) : ''}</span></div>
+      <div style="border-top:1px dashed var(--line);margin:8px 0"></div>
+      ${o.items.map(i => `<div class="rr"><span>${i.qty}× ${esc(i.name)}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}
+      <div class="rr" style="font-weight:700;color:var(--green);font-size:16px"><span style="color:inherit">Total</span><span>${money(o.total)}</span></div>
+    </div></div>`,
+    `<div class="two"><button class="btn btn-line" data-act="goHome">Back to Home</button><button class="btn btn-green" data-act="myOrdersFromDone">My Orders</button></div>`);
 }

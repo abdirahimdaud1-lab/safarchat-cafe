@@ -24,8 +24,10 @@ function mogMinutes(){
     return h * 60 + m;
   } catch (e) { const d = new Date(); return ((d.getUTCHours() + 3) % 24) * 60 + d.getUTCMinutes(); }
 }
-const STORE = { id:'dahab', name:'SafarChat Café · Dahab Tower', addr:'Dahab Tower, Ground Floor · KM4, Hodan, Mogadishu', phone:'+252 61 000 0000', open:390, close:1410, dist:'0.4 km' };
-const storeOpen = () => { const m = mogMinutes(); return m >= STORE.open && m < STORE.close; };
+const STORE = { id:'dahab', name:'SafarChat Café · Dahab Tower', addr:'Dahab Tower, Ground Floor · KM4, Hodan, Mogadishu', phone:'+252 61 747 5902', open:390, close:1410, closed:false, dist:'0.4 km' };
+const storeOpen = () => { const m = mogMinutes(); return !STORE.closed && m >= STORE.open && m < STORE.close; };
+const fmtMin = m => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${(h % 12) || 12}:${String(mm).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+const storeHours = () => `${fmtMin(STORE.open)} – ${fmtMin(STORE.close)}`;
 const fmtDate = t => new Date(t).toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
 const fmtDT = t => new Date(t).toLocaleString(undefined, { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
 function ago(t){
