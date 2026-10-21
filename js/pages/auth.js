@@ -146,10 +146,10 @@ async function enterApp(msg){
     if (b > 0){ await refreshState(true); toast(`Happy birthday! ${b} Stars added`); }
   } catch (e) {}
 }
-async function signOut(){
+async function signOut(localOnly){
   closeAll(); const q = $('.qr-full'); if (q) q.remove();
   stopLive();
-  await API.signOut();
+  await API.signOut(localOnly);
   S = null; ME = null;
   $$('.screen').forEach(s => s.innerHTML = '');
   showAuth('welcome');

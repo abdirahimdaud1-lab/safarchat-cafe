@@ -36,7 +36,7 @@ const API = {
     const { error } = await this.sb.auth.signInWithPassword({ email:this.loginEmail(phone), password });
     if (error) throw new ApiError(error);
   },
-  async signOut(){ try { await this.sb.auth.signOut(); } catch (e) {} },
+  async signOut(localOnly){ try { await this.sb.auth.signOut(localOnly ? { scope:'local' } : undefined); } catch (e) {} },
   listen(table, filter, cb){
     try { return this.sb.channel('rt-' + table + '-' + uid()).on('postgres_changes', { event:'*', schema:'public', table, filter }, cb).subscribe(); }
     catch (e) { return null; }

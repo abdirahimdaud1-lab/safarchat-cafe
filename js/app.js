@@ -156,7 +156,7 @@ const A = {
     const btn = $('[data-act="deleteDo"]', sh); btn.disabled = true; btn.textContent = 'Deleting…';
     API.call('delete_my_account').then(async () => {
       try { localStorage.removeItem('safarchat.cart.' + S.id); } catch (e) {}
-      await signOut(); toast('Your account was deleted');
+      await signOut(true); toast('Your account was deleted');
     }).catch(e => { btn.disabled = false; btn.textContent = 'Delete'; const er = $('#delErr', sh); er.textContent = errText(e); er.hidden = false; });
   },
   authGo: el => { AUTH.show = {}; showAuth(el.dataset.v); },
